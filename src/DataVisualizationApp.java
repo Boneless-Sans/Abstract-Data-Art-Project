@@ -1,5 +1,8 @@
 import javax.swing.*;
 import java.awt.*;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -11,11 +14,8 @@ public class DataVisualizationApp extends JPanel {
     private String[] valueNames;
     private Map<String, Color> colorMap;
 
-    public DataVisualizationApp(int[] xValues, int[][] yValues, String[] valueNames, Map<String, Color> colorMap) {
-        this.xValues = xValues;
-        this.yValues = yValues;
-        this.valueNames = valueNames;
-        this.colorMap = colorMap;
+    public DataVisualizationApp() {
+        loadDataFromFile("src/data/data.txt");
     }
 
     private int getMinValue() {
@@ -41,7 +41,71 @@ public class DataVisualizationApp extends JPanel {
 
         return roundToNearest1000(max);
     }
+    private void loadDataFromFile(String filePath) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            // Parse headers
+            String line;
+            boolean headersFound = false;
+            while ((line = reader.readLine()) != null) {
+                if (line.equals("!!Headers!!")) {
+                    System.out.println("Headers section found.");
+                    headersFound = true;
+                    break;
+                }
+            }
 
+            if (headersFound) {
+                line = reader.readLine(); // Move to the next line
+                String[] headers = line.split(",");
+                int numYears = headers.length;
+
+                // Initialize xValues array with parsed years
+                xValues = new int[numYears];
+                for (int i = 0; i < numYears; i++) {
+                    xValues[i] = Integer.parseInt(headers[i]);
+                }
+
+                // Parse types
+                while ((line = reader.readLine()) != null) {
+                    if (line.equals("!!Types!!")) {
+                        System.out.println("Types section found.");
+                        line = reader.readLine(); // Move to the next line
+                        String[] types = line.split(",");
+
+                        // Initialize data structures
+                        yValues = new int[types.length][numYears];
+                        valueNames = types;
+
+                        // Parse data for each type
+                        for (int i = 0; i < types.length; i++) {
+                            while ((line = reader.readLine()) != null) {
+                                if (line.equals("!!" + types[i] + "!!")) {
+                                    System.out.println(types[i] + " section found.");
+                                    for (int j = 0; j < numYears; j++) {
+                                        line = reader.readLine();
+                                        yValues[i][j] = Integer.parseInt(line);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Example color mapping: replace this with your actual color mapping logic
+                        colorMap = new HashMap<>();
+                        for (int i = 0; i < types.length; i++) {
+                            colorMap.put(types[i], generateRainbowColor(i, types.length));
+                        }
+
+                        break;
+                    }
+                }
+            } else {
+                System.err.println("Invalid file format: Headers section is missing.");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
     private int roundToNearest1000(int value) {
         return Math.round(value / 10000.0f) * 10000;
@@ -64,54 +128,62 @@ public class DataVisualizationApp extends JPanel {
         valueNames: [City Houses]
         minValue: 0
         maxValue: 0
-      WHY IS IT FUCKING 0???
+      WHY IS IT 0???
      */
-    private void drawLineGraph(Graphics g) {
-        System.out.println("Printing data for debugging:");
-        System.out.println("xValues: " + Arrays.toString(xValues));
-        System.out.println("yValues: " + Arrays.deepToString(yValues));
-        System.out.println("valueNames: " + Arrays.toString(valueNames));
-
-        int minValue = getMinValue();
-        int maxValue = getMaxValue();
-
-        System.out.println("minValue: " + minValue);
-        System.out.println("maxValue: " + maxValue);
-
-        int xMargin = 50;
-        int yMargin = 50;
-        int graphWidth = getWidth() - 2 * xMargin;
-        int graphHeight = getHeight() - 2 * yMargin;
-
-        int numPoints = Math.min(xValues.length, yValues[0].length);
+    private void drawLineGraph(Graphics2D g2d, int width, int height) {
         int numDataSets = yValues.length;
+        int MARGIN = 10;
 
-        int xScale = graphWidth / (numPoints - 1);
+        // Check if there is at least one dataset
+        if (numDataSets != 0) {
+            int numPoints = xValues.length;
 
-        // Draw a line for each data set with the corresponding color
-        for (int dataSetIndex = 0; dataSetIndex < numDataSets; dataSetIndex++) {
-            // Calculate y position for each line
-            int lineY = getHeight() - yMargin - dataSetIndex * (graphHeight / numDataSets);
+            // Find the min and max values in the y dataset
+            double minValue = yValues[0][0];
+            double maxValue = yValues[0][0];
 
-            // Get the color for the current data set
-            String dataSetName = valueNames[dataSetIndex];
-            Color lineColor = colorMap.get(dataSetName);
-            g.setColor(lineColor);
-
-            // Draw the line using data points with dots
-            for (int i = 0; i < numPoints - 1; i++) {
-                int x1 = xMargin + i * xScale;
-                int y1 = calculateYCoordinate(minValue, maxValue, graphHeight, numDataSets, dataSetIndex, i, lineY);
-                int x2 = xMargin + (i + 1) * xScale;
-                int y2 = calculateYCoordinate(minValue, maxValue, graphHeight, numDataSets, dataSetIndex, i + 1, lineY);
-
-                // Draw the line
-                g.drawLine(x1, y1, x2, y2);
-
-                // Draw a dot at each data point
-                int dotSize = 5; // Adjust the size of the dot
-                g.fillOval(x1 - dotSize / 2, y1 - dotSize / 2, dotSize, dotSize);
+            for (int i = 0; i < numDataSets; i++) {
+                for (int j = 0; j < numPoints; j++) {
+                    double value = yValues[i][j];
+                    minValue = Math.min(minValue, value);
+                    maxValue = Math.max(maxValue, value);
+                }
             }
+
+            // Handle the case where minValue equals maxValue
+            double yRange = Math.max(1, maxValue - minValue);
+
+            // Check if yRange is not zero
+            if (yRange != 0) {
+                System.out.println("Debugging Data:");
+                System.out.println("numDataSets: " + numDataSets);
+                System.out.println("numPoints: " + numPoints);
+                System.out.println("minValue: " + minValue);
+                System.out.println("maxValue: " + maxValue);
+                System.out.println("yRange: " + yRange);
+
+                // Implement the rest of the drawing logic here...
+
+                // Example: Calculate scaling factor for y-axis
+                double scaleY = (height - 2 * MARGIN) / yRange;
+
+                // Example: Draw lines using the calculated scaleY
+                for (int i = 0; i < numDataSets; i++) {
+                    for (int j = 0; j < numPoints - 1; j++) {
+                        int x1 = (int) (MARGIN + j * (width - 2 * MARGIN) / (numPoints - 1));
+                        int y1 = (int) (height - MARGIN - (yValues[i][j] - minValue) * scaleY);
+                        int x2 = (int) (MARGIN + (j + 1) * (width - 2 * MARGIN) / (numPoints - 1));
+                        int y2 = (int) (height - MARGIN - (yValues[i][j + 1] - minValue) * scaleY);
+
+                        // Example: Draw a line segment
+                        g2d.drawLine(x1, y1, x2, y2);
+                    }
+                }
+            } else {
+                System.out.println("Error: yRange is zero.");
+            }
+        } else {
+            System.out.println("Error: No datasets available.");
         }
     }
 
@@ -119,20 +191,15 @@ public class DataVisualizationApp extends JPanel {
         int denominator = maxValue - minValue;
         int y;
 
-        if (denominator != 0) {
+        if (denominator != 0 && numDataSets != 0) {
             y = lineY - (yValues[dataSetIndex][dataIndex] * (graphHeight / numDataSets) / denominator);
         } else {
-            // Handle the case where denominator is zero (e.g., all values are the same)
-            System.err.println("Division by zero detected. dataSetIndex: " + dataSetIndex + ", dataIndex: " + dataIndex);
-            System.err.println("minValue: " + minValue + ", maxValue: " + maxValue);
-            System.err.println("yValues[dataSetIndex][dataIndex]: " + yValues[dataSetIndex][dataIndex]);
-            System.err.println("graphHeight: " + graphHeight + ", numDataSets: " + numDataSets);
+            // If either denominator or numDataSets is zero, set y to lineY
             y = lineY;
         }
 
         return y;
     }
-
     //int keyWidth = 150;
     private void drawKey(Graphics g) {
         int keyX = 20;
@@ -152,11 +219,12 @@ public class DataVisualizationApp extends JPanel {
         for (int i = 0; i < valueNames.length; i++) {
             Color rainbowColor = generateRainbowColor(i, valueNames.length);
             g.setColor(rainbowColor);
-            g.fillRect(keyX + labelOffset, keyY + labelOffset + i * (colorBoxSize + labelOffset),
+            int y = keyY + labelOffset + i * (colorBoxSize + labelOffset);
+            g.fillRect(keyX + labelOffset, y,
                     colorBoxSize, colorBoxSize);
 
             g.setColor(Color.BLACK);
-            g.drawRect(keyX + labelOffset, keyY + labelOffset + i * (colorBoxSize + labelOffset),
+            g.drawRect(keyX + labelOffset, y,
                     colorBoxSize, colorBoxSize);
 
             g.drawString(valueNames[i], keyX + colorBoxSize + 2 * labelOffset,
@@ -172,11 +240,13 @@ public class DataVisualizationApp extends JPanel {
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
+
         // Check if xValues, yValues, and valueNames are not null
         if (xValues != null && yValues != null && valueNames != null) {
+            Graphics2D g2d = (Graphics2D) g;
             // Implement the drawing logic here
-            drawLineGraph(g);
-            drawKey(g);
+            drawLineGraph(g2d, getWidth(), getHeight());
+            drawKey(g2d);
         }
     }
 }
