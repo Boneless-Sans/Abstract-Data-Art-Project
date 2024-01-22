@@ -1,0 +1,4 @@
+CityHouses
+Apartments
+SuburbanHouses
+Condominiums

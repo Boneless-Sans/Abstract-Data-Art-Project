@@ -1,21 +1,4 @@
-!!Headers!!
-1980
-1985
-1990
-1995
-2000
-2005
-2010
-2015
-2020
-
-!!Types!!
-City Houses
-Apartments
-Suburban Houses
-Condominiums
-
-!!CityHouses!!
+//CityHouses
 70,000
 85,000
 105,000
@@ -25,8 +8,7 @@ Condominiums
 300,000
 370,000
 475,000
-
-!!Apartments!!
+//Apartments
 55,000
 68,000
 78,000
@@ -36,8 +18,7 @@ Condominiums
 180,000
 230,000
 350,000
-
-!!Suburban Houses!!
+//SuburbanHouses
 75,000
 88,000
 102,000
@@ -47,8 +28,7 @@ Condominiums
 260,000
 320,000
 450,000
-
-!!Condominiums!!
+//Condominiums
 60,000
 72,000
 87,000

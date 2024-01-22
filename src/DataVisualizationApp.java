@@ -4,205 +4,120 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
 public class DataVisualizationApp extends JPanel {
 
     private int[] xValues;
-    private int[][] yValues;  // Updated to handle multiple data sets
+    private int[][] yValues;
     private String[] valueNames;
-    private Map<String, Color> colorMap;
 
-    public DataVisualizationApp() {
-        loadDataFromFile("src/data/data.txt");
+    public DataVisualizationApp(int[] xValues, int[][] yValues, String[] valueNames) {
+        this.xValues = xValues;
+        this.yValues = yValues;
+        this.valueNames = valueNames;
     }
 
-    private int getMinValue() {
-        int min = Integer.MAX_VALUE;
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
 
-        for (int[] dataSet : yValues) {
-            for (int value : dataSet) {
-                min = Math.min(min, value);
-            }
+        if (xValues != null && yValues != null && valueNames != null) {
+            Graphics2D g2d = (Graphics2D) g;
+            drawLineGraph(g2d);
+            drawKey(g2d);
+        }
+    }
+
+    private void drawLineGraph(Graphics2D g2d) {
+        int maxValue = Arrays.stream(yValues)
+                .flatMapToInt(Arrays::stream)
+                .max()
+                .orElse(0);
+
+        int minValue = Arrays.stream(yValues)
+                .flatMapToInt(Arrays::stream)
+                .min()
+                .orElse(0);
+
+        // Draw frame
+        g2d.drawLine(50, getHeight() - 50, getWidth() - 50, getHeight() - 50);
+        g2d.drawLine(50, getHeight() - 50, 50, 50);
+
+        // Draw x-axis labels
+        int xLabelStep = (getWidth() - 100) / (xValues.length - 1);
+        for (int i = 0; i < xValues.length; i++) {
+            int xLabel = 50 + i * xLabelStep;
+            g2d.drawString(Integer.toString(xValues[i]), xLabel, getHeight() - 30);
         }
 
-        return roundToNearest1000(min);
-    }
-
-    private int getMaxValue() {
-        int max = Integer.MIN_VALUE;
-
-        for (int[] dataSet : yValues) {
-            for (int value : dataSet) {
-                max = Math.max(max, value);
-            }
+        // Draw y-axis labels
+        int yLabelStep = (getHeight() - 100) / 10;
+        for (int i = 0; i <= 10; i++) {
+            int yLabel = minValue + i * (maxValue - minValue) / 10;
+            g2d.drawString(Integer.toString(yLabel), 30, getHeight() - 50 - i * yLabelStep);
         }
 
-        return roundToNearest1000(max);
-    }
-    private void loadDataFromFile(String filePath) {
-        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
-            // Parse headers
-            String line;
-            boolean headersFound = false;
-            while ((line = reader.readLine()) != null) {
-                if (line.equals("!!Headers!!")) {
-                    System.out.println("Headers section found.");
-                    headersFound = true;
+        // Loop through each data set
+        for (int dataSetIndex = 0; dataSetIndex < yValues.length; dataSetIndex++) {
+            if (dataSetIndex >= valueNames.length) {
+                // Added bounds checking to prevent ArrayIndexOutOfBoundsException
+                break;
+            }
+
+            int[] xPoints = new int[xValues.length];
+            int[] yPoints = new int[xValues.length];
+
+            // Get color from the key
+            Color lineColor = generateRainbowColor();
+            g2d.setColor(lineColor);
+
+            // Loop through each x-value and calculate the corresponding y-coordinate
+            for (int i = 0; i < xValues.length; i++) {
+                if (i >= yValues[dataSetIndex].length) {
+                    // Added bounds checking to prevent ArrayIndexOutOfBoundsException
                     break;
                 }
+
+                int x = calculateXCoordinate(i, xValues.length, getWidth());
+                int y = calculateYCoordinate(yValues[dataSetIndex][i], maxValue, minValue, getHeight() - 50, yLabelStep);
+
+                xPoints[i] = x;
+                yPoints[i] = y;
+
+                // Draw dots for each data point
+                g2d.fillOval(x - 2, y - 2, 4, 4);
+
+                // Draw price text above each dot
+                String priceText = String.valueOf(yValues[dataSetIndex][i]);
+                int textWidth = g2d.getFontMetrics().stringWidth(priceText);
+                g2d.drawString(priceText, x - textWidth / 2, y - 8);
             }
 
-            if (headersFound) {
-                line = reader.readLine(); // Move to the next line
-                String[] headers = line.split(",");
-                int numYears = headers.length;
-
-                // Initialize xValues array with parsed years
-                xValues = new int[numYears];
-                for (int i = 0; i < numYears; i++) {
-                    xValues[i] = Integer.parseInt(headers[i]);
-                }
-
-                // Parse types
-                while ((line = reader.readLine()) != null) {
-                    if (line.equals("!!Types!!")) {
-                        System.out.println("Types section found.");
-                        line = reader.readLine(); // Move to the next line
-                        String[] types = line.split(",");
-
-                        // Initialize data structures
-                        yValues = new int[types.length][numYears];
-                        valueNames = types;
-
-                        // Parse data for each type
-                        for (int i = 0; i < types.length; i++) {
-                            while ((line = reader.readLine()) != null) {
-                                if (line.equals("!!" + types[i] + "!!")) {
-                                    System.out.println(types[i] + " section found.");
-                                    for (int j = 0; j < numYears; j++) {
-                                        line = reader.readLine();
-                                        yValues[i][j] = Integer.parseInt(line);
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-
-                        // Example color mapping: replace this with your actual color mapping logic
-                        colorMap = new HashMap<>();
-                        for (int i = 0; i < types.length; i++) {
-                            colorMap.put(types[i], generateRainbowColor(i, types.length));
-                        }
-
-                        break;
-                    }
-                }
-            } else {
-                System.err.println("Invalid file format: Headers section is missing.");
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+            // Draw the line for the current data set
+            g2d.drawPolyline(xPoints, yPoints, xValues.length);
         }
     }
 
-    private int roundToNearest1000(int value) {
-        return Math.round(value / 10000.0f) * 10000;
-    }
-    //this shit is so fucking annoying to deal with, getting the data to transfer is not working out too well
-    //todo: kill myself after this
-    /*
-    FIXME
-        Headers section found.
-        Types section found.
-        Printing data for debugging:
-        xValues: [0]
-        yValues: [[0]]
-        valueNames: [City Houses]
-        minValue: 0
-        maxValue: 0
-        Printing data for debugging:
-        xValues: [0]
-        yValues: [[0]]
-        valueNames: [City Houses]
-        minValue: 0
-        maxValue: 0
-      WHY IS IT 0???
-     */
-    private void drawLineGraph(Graphics2D g2d, int width, int height) {
-        int numDataSets = yValues.length;
-        int MARGIN = 10;
-
-        // Check if there is at least one dataset
-        if (numDataSets != 0) {
-            int numPoints = xValues.length;
-
-            // Find the min and max values in the y dataset
-            double minValue = yValues[0][0];
-            double maxValue = yValues[0][0];
-
-            for (int i = 0; i < numDataSets; i++) {
-                for (int j = 0; j < numPoints; j++) {
-                    double value = yValues[i][j];
-                    minValue = Math.min(minValue, value);
-                    maxValue = Math.max(maxValue, value);
-                }
-            }
-
-            // Handle the case where minValue equals maxValue
-            double yRange = Math.max(1, maxValue - minValue);
-
-            // Check if yRange is not zero
-            if (yRange != 0) {
-                System.out.println("Debugging Data:");
-                System.out.println("numDataSets: " + numDataSets);
-                System.out.println("numPoints: " + numPoints);
-                System.out.println("minValue: " + minValue);
-                System.out.println("maxValue: " + maxValue);
-                System.out.println("yRange: " + yRange);
-
-                // Implement the rest of the drawing logic here...
-
-                // Example: Calculate scaling factor for y-axis
-                double scaleY = (height - 2 * MARGIN) / yRange;
-
-                // Example: Draw lines using the calculated scaleY
-                for (int i = 0; i < numDataSets; i++) {
-                    for (int j = 0; j < numPoints - 1; j++) {
-                        int x1 = (int) (MARGIN + j * (width - 2 * MARGIN) / (numPoints - 1));
-                        int y1 = (int) (height - MARGIN - (yValues[i][j] - minValue) * scaleY);
-                        int x2 = (int) (MARGIN + (j + 1) * (width - 2 * MARGIN) / (numPoints - 1));
-                        int y2 = (int) (height - MARGIN - (yValues[i][j + 1] - minValue) * scaleY);
-
-                        // Example: Draw a line segment
-                        g2d.drawLine(x1, y1, x2, y2);
-                    }
-                }
-            } else {
-                System.out.println("Error: yRange is zero.");
-            }
-        } else {
-            System.out.println("Error: No datasets available.");
-        }
+    private int calculateXCoordinate(int index, int totalPoints, int width) {
+        double xLabelStep = (double) (width - 100) / (totalPoints - 1);
+        int xCoordinate = (int) (50 + index * xLabelStep);
+        //System.out.println("Index: " + index + ", X Coordinate: " + xCoordinate);
+        return xCoordinate;
     }
 
-    private int calculateYCoordinate(int minValue, int maxValue, int graphHeight, int numDataSets, int dataSetIndex, int dataIndex, int lineY) {
-        int denominator = maxValue - minValue;
-        int y;
+    private int calculateYCoordinate(int value, int maxValue, int minValue, int height, int yLabelStep) {
+        double yRange = maxValue - minValue;
+        double yScale = (double) (height - 100) / yRange;
 
-        if (denominator != 0 && numDataSets != 0) {
-            y = lineY - (yValues[dataSetIndex][dataIndex] * (graphHeight / numDataSets) / denominator);
-        } else {
-            // If either denominator or numDataSets is zero, set y to lineY
-            y = lineY;
-        }
+        int y = height - 50 - (int) (yScale * (value - minValue));
 
-        return y;
+        // Ensure y is within the valid range
+        return Math.min(Math.max(y, 50), height - 50);
     }
-    //int keyWidth = 150;
+
     private void drawKey(Graphics g) {
-        int keyX = 20;
+        int keyX = getWidth() - 170;
         int keyY = 20;
         int keyWidth = 150;
         int colorBoxSize = 20;
@@ -217,7 +132,7 @@ public class DataVisualizationApp extends JPanel {
         g.drawRect(keyX, keyY, keyWidth, keyHeight);
 
         for (int i = 0; i < valueNames.length; i++) {
-            Color rainbowColor = generateRainbowColor(i, valueNames.length);
+            Color rainbowColor = generateRainbowColor();
             g.setColor(rainbowColor);
             int y = keyY + labelOffset + i * (colorBoxSize + labelOffset);
             g.fillRect(keyX + labelOffset, y,
@@ -231,22 +146,45 @@ public class DataVisualizationApp extends JPanel {
                     keyY + labelOffset + i * (colorBoxSize + labelOffset) + colorBoxSize);
         }
     }
+    private Color generateRainbowColor() {
+        String filePath = "src/data/colors.txt";
+        String[] colors = new String[0];
+        try {
+            // Read the file
+            BufferedReader reader = new BufferedReader(new FileReader(filePath));
 
-    private Color generateRainbowColor(int index, int totalEntries) {
-        float hue = (float) index / (float) totalEntries;
-        return Color.getHSBColor(hue, 1.0f, 1.0f);
-    }
+            // Count the number of lines in the file
+            long lineCount = reader.lines().count();
 
-    @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
+            // Create an array to store the lines
+            colors = new String[(int) lineCount];
 
-        // Check if xValues, yValues, and valueNames are not null
-        if (xValues != null && yValues != null && valueNames != null) {
-            Graphics2D g2d = (Graphics2D) g;
-            // Implement the drawing logic here
-            drawLineGraph(g2d, getWidth(), getHeight());
-            drawKey(g2d);
+            // Reset the reader
+            reader.close();
+            reader = new BufferedReader(new FileReader(filePath));
+
+            // Read each line from the file and save it to the array
+            for (int i = 0; i < lineCount; i++) {
+                colors[i] = reader.readLine();
+            }
+
+            // Close the file reader
+            reader.close();
+
+            // Print the resulting array (optional)
+            for (int i = 0; i < colors.length; i++) {
+                System.out.println("Line " + (i + 1) + ": " + colors[i]);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+        int ranIndex = (int) (Math.random() * (colors.length - 1));
+        String[] colorValue = colors[ranIndex].split(",");
+        int[] rgbValues = new int[]{
+                Integer.parseInt(colorValue[0]),
+                Integer.parseInt(colorValue[1]),
+                Integer.parseInt(colorValue[2])
+        };
+        return new Color(rgbValues[0], rgbValues[1], rgbValues[2]);
     }
 }
